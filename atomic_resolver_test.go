@@ -3,7 +3,7 @@ package snowflake_test
 import (
 	"testing"
 
-	"github.com/godruoyi/go-snowflake"
+	"github.com/hedwi/go-snowflake"
 )
 
 func TestAtomicResolver(t *testing.T) {
