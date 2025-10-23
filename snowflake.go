@@ -7,8 +7,8 @@ import (
 
 // These constants are the bit lengths of snowflake ID parts.
 const (
-	TimestampLength uint8  = 44
-	MachineIDLength uint8  = 8
+	TimestampLength uint8  = 43
+	MachineIDLength uint8  = 9
 	SequenceLength  uint8  = 12
 	MaxSequence     uint16 = 1<<SequenceLength - 1
 	MaxTimestamp    uint64 = 1<<TimestampLength - 1
@@ -64,7 +64,7 @@ func NextID() (uint64, error) {
 
 	df := elapsedTime(c, startTime)
 	if df < 0 || uint64(df) > MaxTimestamp {
-		return 0, errors.New("the maximum life cycle of the snowflake algorithm is 2^44-1(millis), please check start-time")
+		return 0, errors.New("the maximum life cycle of the snowflake algorithm is 2^43-1(millis), please check start-time")
 	}
 
 	id := (uint64(df) << uint64(timestampMoveLength)) | (machineID << uint64(machineIDMoveLength)) | uint64(seq)
@@ -94,17 +94,17 @@ func SetStartTime(s time.Time) {
 	// since we check the current millisecond is greater than s, so we don't need to check the overflow.
 	df := elapsedTime(currentMillis(), s)
 	if uint64(df) > MaxTimestamp {
-		panic("The maximum life cycle of the snowflake algorithm is 558 years")
+		panic("The maximum life cycle of the snowflake algorithm is 279 years")
 	}
 
 	startTime = s
 }
 
-// SetMachineID specify the machine ID. It will panic when machined > max limit for 2^8-1.
+// SetMachineID specify the machine ID. It will panic when machined > max limit for 2^9-1.
 // This function is thread-unsafe, recommended you call him in the main function.
 func SetMachineID(m uint16) {
 	if m > MaxMachineID {
-		panic("The machineID cannot be greater than 255")
+		panic("The machineID cannot be greater than 511")
 	}
 	machineID = uint64(m)
 }

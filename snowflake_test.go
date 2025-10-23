@@ -88,11 +88,11 @@ func TestSetStartTime(t *testing.T) {
 		defer func() {
 			if e := recover(); e == nil {
 				tt.Error("Should throw a error when starttime is too small")
-			} else if e.(string) != "The maximum life cycle of the snowflake algorithm is 558 years" {
-				tt.Error("The error message should equal [The maximum life cycle of the snowflake algorithm is 558 years]")
+			} else if e.(string) != "The maximum life cycle of the snowflake algorithm is 279 years" {
+				tt.Error("The error message should equal [The maximum life cycle of the snowflake algorithm is 279 years]")
 			}
 		}()
-		// Set a time that would exceed 44-bit timestamp limit (558 years)
+		// Set a time that would exceed 43-bit timestamp limit (279 years)
 		// Use a very early date that Go supports
 		time := time.Date(1000, 1, 1, 1, 0, 0, 0, time.UTC)
 		snowflake.SetStartTime(time)
@@ -161,12 +161,12 @@ func TestSetMachineID(t *testing.T) {
 		defer func() {
 			if err := recover(); err == nil {
 				tt.Error("Should throw a error")
-			} else if err.(string) != "The machineID cannot be greater than 255" {
-				tt.Error("The error message should be eq 「The machineID cannot be greater than 255」")
+			} else if err.(string) != "The machineID cannot be greater than 511" {
+				tt.Error("The error message should be eq 「The machineID cannot be greater than 511」")
 			}
 		}()
 
-		snowflake.SetMachineID(256)
+		snowflake.SetMachineID(512)
 	})
 
 	snowflake.SetMachineID(100)
