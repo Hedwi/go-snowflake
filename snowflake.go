@@ -2,6 +2,7 @@ package snowflake
 
 import (
 	"errors"
+	"sync/atomic"
 	"time"
 )
 
@@ -31,9 +32,10 @@ type SequenceResolver func(ms int64) (uint16, error)
 // default machineID is 0
 // default resolver is AtomicResolver
 var (
-	resolver  SequenceResolver
-	machineID uint64 = 0
-	startTime        = time.Date(2008, 11, 10, 23, 0, 0, 0, time.UTC)
+	resolver      SequenceResolver
+	machineID     uint64 = 0
+	startTime            = time.Date(2008, 11, 10, 23, 0, 0, 0, time.UTC)
+	lastTimestamp int64  = 0 // 👈 新增：记录上一次生成 ID 的毫秒时间（相对于 Unix）
 )
 
 // ID use ID to generate snowflake id, and it will ignore error. if you want error info, you need use NextID method.
@@ -45,29 +47,52 @@ func ID() uint64 {
 
 // NextID use NextID to generate snowflake id and return an error.
 // This function is thread safe.
+// NextID use NextID to generate snowflake id and return an error.
+// This function is thread safe.
 func NextID() (uint64, error) {
-	c := currentMillis()
-	seqResolver := callSequenceResolver()
-	seq, err := seqResolver(c)
+	now := currentMillis()
+	last := atomic.LoadInt64(&lastTimestamp)
 
+	// ⏰ 时钟回拨检测
+	if now < last {
+		backward := last - now
+		// 🛡️ 最大容忍回拨：5000 毫秒（5秒）
+		if backward > 5000 {
+			return 0, errors.New("clock moved backward too much (>5s), refusing to generate ID")
+		}
+		// 在容忍范围内，等待时间追上
+		time.Sleep(time.Duration(backward) * time.Millisecond)
+		now = currentMillis()
+	}
+
+	// 获取序列号
+	seqResolver := callSequenceResolver()
+	seq, err := seqResolver(now)
 	if err != nil {
 		return 0, err
 	}
 
+	// 序列号溢出：等待下一毫秒
 	for seq >= MaxSequence {
-		c = waitForNextMillis(c)
-		seq, err = seqResolver(c)
+		now = waitForNextMillis(now)
+		seq, err = seqResolver(now)
 		if err != nil {
 			return 0, err
 		}
 	}
 
-	df := elapsedTime(c, startTime)
+	// 更新 lastTimestamp（必须在生成 ID 前完成）
+	atomic.StoreInt64(&lastTimestamp, now)
+
+	// 计算相对于 startTime 的偏移
+	df := elapsedTime(now, startTime)
 	if df < 0 || uint64(df) > MaxTimestamp {
 		return 0, errors.New("the maximum life cycle of the snowflake algorithm is 2^43-1(millis), please check start-time")
 	}
 
-	id := (uint64(df) << uint64(timestampMoveLength)) | (machineID << uint64(machineIDMoveLength)) | uint64(seq)
+	id := (uint64(df) << uint64(timestampMoveLength)) |
+		(machineID << uint64(machineIDMoveLength)) |
+		uint64(seq)
 	return id, nil
 }
 
@@ -151,13 +176,15 @@ func ParseID(id uint64) SID {
 //--------------------------------------------------------------------
 
 func waitForNextMillis(last int64) int64 {
-	now := currentMillis()
-	for now == last {
-		now = currentMillis()
+	for {
+		now := currentMillis()
+		if now > last {
+			return now
+		}
+		// 避免 CPU 空转，微小休眠
+		time.Sleep(1 * time.Nanosecond)
 	}
-	return now
 }
-
 func callSequenceResolver() SequenceResolver {
 	if resolver == nil {
 		return AtomicResolver
