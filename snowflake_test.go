@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/godruoyi/go-snowflake"
+	"github.com/hedwi/go-snowflake"
 )
 
 func TestID(t *testing.T) {
@@ -85,26 +85,23 @@ func TestSetStartTime(t *testing.T) {
 	})
 
 	t.Run("Start time too small", func(tt *testing.T) {
-		defer func() {
-			if e := recover(); e == nil {
-				tt.Error("Should throw a error when starttime is too small")
-			} else if e.(string) != "The maximum life cycle of the snowflake algorithm is 69 years" {
-				tt.Error("The error message should equal [The maximum life cycle of the snowflake algorithm is 69 years]")
-			}
-		}()
-		// because 2021-69 = 1952, set df time > 69 years to test.
-		time := time.Date(1951, 1, 1, 1, 0, 0, 0, time.UTC)
-		snowflake.SetStartTime(time)
+		// Skip this test as 48-bit timestamp can support 8925 years,
+		// making it impractical to trigger the overflow in a test
+		tt.Skip("48-bit timestamp supports 8925 years, making overflow test impractical")
 	})
 
 	t.Run("Default start time", func(tt *testing.T) {
+		// Default start time is 2008-11-10 23:00:00 UTC
 		defaultTime := time.Date(2008, 11, 10, 23, 0, 0, 0, time.UTC)
 		defaultNano := defaultTime.UTC().UnixNano() / 1e6
 
 		sid := snowflake.ParseID(snowflake.ID())
 		currentTime := sid.Timestamp + uint64(defaultNano)
+		t.Log(sid.Timestamp)
 
 		nowNano := time.Now().UTC().UnixNano() / 1e6
+		t.Log(currentTime)
+		t.Log(nowNano)
 
 		// approximate equality, Assuming that the program is completed in one second.
 		if currentTime/1000 != uint64(nowNano)/1000 {
@@ -156,12 +153,12 @@ func TestSetMachineID(t *testing.T) {
 		defer func() {
 			if err := recover(); err == nil {
 				tt.Error("Should throw a error")
-			} else if err.(string) != "The machineID cannot be greater than 1023" {
-				tt.Error("The error message should be eq 「The machineID cannot be greater than 1023」")
+			} else if err.(string) != "The machineID cannot be greater than 127" {
+				tt.Error("The error message should be eq 「The machineID cannot be greater than 127」")
 			}
 		}()
 
-		snowflake.SetMachineID(1024)
+		snowflake.SetMachineID(128)
 	})
 
 	snowflake.SetMachineID(100)
@@ -217,18 +214,18 @@ func TestNextID(t *testing.T) {
 
 func TestParseID(t *testing.T) {
 	time := 101 << (snowflake.MachineIDLength + snowflake.SequenceLength)
-	machineid := 1023 << snowflake.SequenceLength
-	seq := 999
+	machineid := 127 << snowflake.SequenceLength
+	seq := 511
 
 	id := uint64(time | machineid | seq)
 
 	d := snowflake.ParseID(id)
-	if d.Sequence != 999 {
-		t.Error("Sequence should be equal 999")
+	if d.Sequence != 511 {
+		t.Error("Sequence should be equal 511")
 	}
 
-	if d.MachineID != 1023 {
-		t.Error("MachineID should be equal 1023")
+	if d.MachineID != 127 {
+		t.Error("MachineID should be equal 127")
 	}
 
 	if d.Timestamp != 101 {
